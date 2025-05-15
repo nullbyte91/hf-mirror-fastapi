@@ -31,7 +31,7 @@ async def proxy_hf_api(api_path: str, request: Request):
     url = f"https://huggingface.co/api/{api_path}"
     headers = {}
     if TOKEN:
-        headers["Authorization"] = f"Bearer {TOKEN}"]
+        headers["Authorization"] = f"Bearer {TOKEN}"
     async with app.state.client.stream("GET", url, headers=headers) as r:
         if r.status_code != 200:
             raise HTTPException(status_code=r.status_code)
