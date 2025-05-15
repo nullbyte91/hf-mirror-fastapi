@@ -7,11 +7,9 @@ import aiofiles
 
 app = FastAPI(title="HF Mirror FastAPI")
 
-# Directory for cached files
 CACHE_DIR = Path(os.getenv("CACHE_DIR", "/cache"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Hugging Face authentication token
 TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
 client = httpx.AsyncClient()
 
@@ -28,14 +26,21 @@ async def mirror(full_path: str, request: Request):
     cache_path = CACHE_DIR / full_path
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # ✅ If file exists in cache
     if cache_path.is_file():
         if request.method == "HEAD":
             return Response(status_code=200)
         return FileResponse(str(cache_path))
 
-    headers = {}
-    if TOKEN:
-        headers["Authorization"] = f"Bearer {TOKEN}"
+    # ✅ If file doesn't exist in cache, download on GET, skip download on HEAD
+    headers = {"Authorization": f"Bearer {TOKEN}"} if TOKEN else {}
+    
+    if request.method == "HEAD":
+        # Try remote HEAD to check if it exists
+        resp = await client.head(url, headers=headers)
+        return Response(status_code=resp.status_code)
+
+    # Download and cache the file
     resp = await client.get(url, headers=headers)
     if resp.status_code != 200:
         raise HTTPException(status_code=resp.status_code)
@@ -43,6 +48,4 @@ async def mirror(full_path: str, request: Request):
     async with aiofiles.open(cache_path, "wb") as f:
         await f.write(resp.content)
 
-    if request.method == "HEAD":
-        return Response(status_code=200)
     return Response(content=resp.content, media_type=resp.headers.get("content-type"))
